@@ -275,9 +275,10 @@
      Les onclick="..." dans le HTML ont besoin de ces fonctions
      dans window.
   ════════════════════════════════════════════════════════════ */
-  window.demarrer    = demarrer;
-  window.reculer     = reculer;
-  window.recommencer = recommencer;
+window.demarrer    = demarrer;
+window.reculer     = reculer;
+window.recommencer = recommencer;
+window.accueil     = recommencer;
 
   /* ─── Lancement ─────────────────────────────────────────── */
   load();
