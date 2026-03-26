@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>      Atlas des facteurs pronostics en cancer du sein </title>
+  <title>Atlas des facteurs pronostics en cancer du sein</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -13,9 +13,11 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --pink:       #D11467;
-      --pink-light: #fce7f3;
-      --pink-dark:  #a50d52;
+      /* Nouvelles couleurs : Orange Institut Curie */
+      --orange:       #F07D00;  
+      --orange-light: #FEF2E6;  
+      --orange-dark:  #C86800;  
+
       --dark:       #1a1a2e;
       --text:       #2d3436;
       --muted:      #636e72;
@@ -72,18 +74,17 @@
     .header-logo-icon {
       width: 34px;
       height: 34px;
-      /* On enlève le fond rose puisqu'on met une image complète */
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      overflow: hidden; /* Empêche l'image de dépasser du carré arrondi */
+      overflow: hidden;
     }
     .header-logo-icon img {
       width: 100%;
       height: 100%;
-      object-fit: cover; /* Assure que l'image remplit bien l'espace sans se déformer */
+      object-fit: cover;
     }
     svg { display: block; overflow: visible; }
 
@@ -107,8 +108,8 @@
     .btn:active { transform: scale(.98); }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-    .btn-primary { background: var(--pink); color: var(--white); }
-    .btn-primary:not(:disabled):hover { background: var(--pink-dark); }
+    .btn-primary { background: var(--orange); color: var(--white); }
+    .btn-primary:not(:disabled):hover { background: var(--orange-dark); }
 
     .btn-ghost {
       background: transparent;
@@ -117,27 +118,27 @@
       padding: 9px 18px;
       font-size: 14px;
     }
-    .btn-ghost:hover { border-color: var(--pink); color: var(--pink); }
+    .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
-    .btn-white { background: var(--white); color: var(--pink); }
-    .btn-white:hover { background: var(--pink-light); }
+    .btn-white { background: var(--white); color: var(--orange); }
+    .btn-white:hover { background: var(--orange-light); }
 
     /* ─────────────────────────────────────────
        ÉCRAN 1 : ACCUEIL
     ───────────────────────────────────────── */
     #screen-home .hero {
-      background: linear-gradient(135deg, var(--pink) 0%, var(--pink-dark) 100%);
+      background: linear-gradient(135deg, var(--orange) 0%, var(--orange-dark) 100%);
       color: var(--white);
       padding: 80px 40px;
       display: flex;
       align-items: center;
-      justify-content: center; /* Centre le texte puisqu'il n'y a plus d'image à côté */
+      justify-content: center;
       min-height: 420px;
-      text-align: center; /* Centre le texte à l'intérieur de son conteneur */
+      text-align: center;
     }
     #screen-home .hero-text { max-width: 800px; display: flex; flex-direction: column; align-items: center; }
     #screen-home .hero-text h1 {
-      font-size: clamp(32px, 5vw, 54px); /* Titre plus grand */
+      font-size: clamp(32px, 5vw, 54px);
       font-weight: 800;
       line-height: 1.2;
       margin-bottom: 20px;
@@ -211,7 +212,7 @@
     }
     #screen-quiz .progress-bar {
       height: 100%;
-      background: linear-gradient(90deg, var(--pink), var(--pink-dark));
+      background: linear-gradient(90deg, var(--orange), var(--orange-dark));
       border-radius: 99px;
       transition: width .4s ease;
       width: 0%;
@@ -219,7 +220,7 @@
     #screen-quiz .progress-pct {
       font-size: 13px;
       font-weight: 700;
-      color: var(--pink);
+      color: var(--orange);
       white-space: nowrap;
     }
 
@@ -264,13 +265,13 @@
       transition: border-color .15s, background .15s, transform .1s;
     }
     .choice-btn:hover {
-      border-color: var(--pink);
-      background: var(--pink-light);
+      border-color: var(--orange);
+      background: var(--orange-light);
       transform: translateX(4px);
     }
     .choice-btn:active { transform: translateX(2px); }
     .choice-btn .arrow {
-      color: var(--pink);
+      color: var(--orange);
       font-size: 18px;
       opacity: 0;
       transition: opacity .15s;
@@ -278,7 +279,6 @@
     }
     .choice-btn:hover .arrow { opacity: 1; }
 
-    /* Pied de carte : bouton retour */
     .quiz-footer {
       margin-top: 24px;
       padding-top: 20px;
@@ -301,7 +301,7 @@
 
     /* Bandeau parcours */
     .path-banner {
-      background: linear-gradient(135deg, var(--pink), var(--pink-dark));
+      background: linear-gradient(135deg, var(--orange), var(--orange-dark));
       color: var(--white);
       border-radius: 14px;
       padding: 24px 28px;
@@ -365,7 +365,6 @@
     .badge.nrec { background: var(--red-bg);   color: var(--red); }
     .badge.ns   { background: var(--grey-bg);  color: var(--muted); }
 
-    /* Avertissement */
     .warning-box {
       background: #fffbeb;
       border: 1px solid #fde68a;
@@ -451,7 +450,9 @@
     ⚠️ Outil d'aide à la décision — Ne remplace pas l'avis d'un professionnel de santé.
   </footer>
 
-</div><div id="screen-quiz" class="screen">
+</div>
+
+<div id="screen-quiz" class="screen">
 
   <header class="header">
     <a href="#" class="header-logo" onclick="accueil(); return false;">
@@ -482,7 +483,9 @@
     </div>
   </div>
 
-</div><div id="screen-results" class="screen">
+</div>
+
+<div id="screen-results" class="screen">
 
   <header class="header">
     <a href="#" class="header-logo" onclick="accueil(); return false;">
@@ -509,6 +512,8 @@
     </div>
   </div>
 
-</div><script src="app.js"></script>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
