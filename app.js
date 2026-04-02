@@ -275,34 +275,44 @@
 
   function renderEtudes() {
     var container = $('etudes-container');
-    // Si la zone n'existe pas dans le HTML ou que base_etudes a raté, on annule silencieusement
     if (!container || !baseEtudes || !baseEtudes.etudes) return; 
     
     container.innerHTML = '';
     var profilPatient = construireProfilPatient();
     var etudesPertinentes = [];
 
-    // Calcul du score pour chaque étude
+    // Calcul du score
     baseEtudes.etudes.forEach(function(etude) {
       var score = calculerScoreEtude(etude, profilPatient, baseEtudes.mapping);
-      if (score >= 50) { // On ne garde que les études à 50% de match minimum
+      if (score >= 50) {
         etude.scoreMatch = score;
         etudesPertinentes.push(etude);
       }
     });
 
-    // Tri par score décroissant
     etudesPertinentes.sort(function(a, b) { return b.scoreMatch - a.scoreMatch; });
 
     if (etudesPertinentes.length === 0) {
-      container.innerHTML = '<p class="muted" style="text-align:center; padding:20px;">Aucune étude spécifique correspondant exactement à ce profil n\'est disponible dans la base actuelle.</p>';
+      container.innerHTML = '<p class="muted" style="text-align:center; padding:20px;">Aucune étude spécifique correspondant à ce profil n\'est disponible.</p>';
       return;
     }
 
-    // Affichage des cartes d'études
     etudesPertinentes.forEach(function(etude) {
       var card = document.createElement('div');
       card.className = 'etude-card';
+      
+      // On construit dynamiquement le bloc des statistiques
+      var statsHtml = '';
+      var clesStats = Object.keys(etude.outcomes || {});
+      
+      if (clesStats.length > 0) {
+          clesStats.forEach(function(nomStat) {
+              statsHtml += '<div style="margin-bottom: 4px;"><strong>' + nomStat + ' :</strong> ' + etude.outcomes[nomStat] + '</div>';
+          });
+      } else {
+          statsHtml = '<div style="color: #999; font-style: italic;">Pas de données chiffrées standardisées pour cette étude.</div>';
+      }
+
       card.innerHTML = `
         <div class="etude-header">
             <span class="etude-score">${etude.scoreMatch}% Match</span>
@@ -310,8 +320,7 @@
         </div>
         <h4 class="etude-title">${etude.objectif !== 'NC' ? etude.objectif : 'Étude clinique'}</h4>
         <div class="etude-stats">
-            <div><strong>Survie globale (10A) :</strong> ${etude.outcomes.OS_10A}</div>
-            <div><strong>Récidive locale (10A) :</strong> ${etude.outcomes.LR_10A}</div>
+            ${statsHtml}
         </div>
         <a href="${etude.reference}" target="_blank" class="etude-link">Voir l'étude (DOI) ↗</a>
       `;
