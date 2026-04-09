@@ -1,5 +1,5 @@
 /*
- * Atlas Pronostics — app.js (Version Complète avec Moteur Avancé)
+ * Atlas Pronostics — app.js (Version Optimisée pour ATLAS_COMPLET.xlsx)
  */
 
 (function () {
@@ -7,7 +7,7 @@
 
   var tree       = null;
   var baseEtudes = null;
-  window.baseEtudes = null; // Permet l'accès depuis la console
+  window.baseEtudes = null; // Permet l'accès depuis la console pour tes tests
   var current    = null;
   var history    = [];
   var maxDepth   = 1;
@@ -47,7 +47,6 @@
     })
     .catch(function (err) {
       console.error('[Atlas] Erreur fatale:', err);
-      alert('Erreur lors du chargement des données.\n' + err.message);
     });
   }
 
@@ -67,7 +66,6 @@
     render(current);
   }
 
-  /* ─── FORMATAGE TEXTE (Arbre) ─── */
   function humaniserLabel(val) {
     var v = String(val || '').trim();
     if (v === '1.0' || v === '1') return 'Oui / Positif';
@@ -81,14 +79,11 @@
       renderResults(node.donnees);
       return;
     }
-
     var questionTitre = node.titre || '(Question)';
     $('quiz-question').textContent = questionTitre;
-
     var step  = history.length + 1;
     var total = maxDepth || step;
     var pct   = Math.round(Math.max(0, (step - 1) / total) * 100);
-
     $('quiz-step-label').textContent   = 'Étape ' + step + ' / ' + total;
     $('quiz-pct-label').textContent    = pct + ' %';
     $('quiz-progress-bar').style.width = pct + '%';
@@ -97,132 +92,84 @@
     var container = $('quiz-choices');
     container.innerHTML = '';
     var keys = Object.keys(node.choix || {});
-
-    if (keys.length === 0) {
-      container.innerHTML = '<p class="muted">Aucune option disponible.</p>';
-      return;
-    }
-
     keys.forEach(function (label) {
       var next = node.choix[label];
       var btn = document.createElement('button');
       btn.className = 'choice-btn';
-
       var txt = document.createElement('span');
       txt.textContent = humaniserLabel(label); 
       btn.appendChild(txt);
-
       var arr = document.createElement('span');
-      arr.className = 'arrow';
-      arr.textContent = '→';
+      arr.className = 'arrow'; arr.textContent = '→';
       btn.appendChild(arr);
-
-      btn.addEventListener('click', (function (l, n, q) {
-        return function () {
-          history.push({ node: current, label: l, question: q });
-          current = n;
-          render(current);
-        };
-      }(label, next, questionTitre)));
-
+      btn.addEventListener('click', function () {
+        history.push({ node: current, label: label, question: questionTitre });
+        current = next;
+        render(current);
+      });
       container.appendChild(btn);
     });
   }
 
   function reculer() {
     if (history.length === 0) return;
-    var prev = history.pop();
-    current  = prev.node;
+    current = history.pop().node;
     render(current);
   }
 
-  /* ─── CALCULETTE NUMÉRIQUE ─── */
+  /* ─── MOTEUR DE MATCHING (CORRIGÉ) ─── */
   function matchNumerique(valeurPatient, critereEtude) {
-    if (!critereEtude || critereEtude === "-1" || critereEtude === "NC" || critereEtude === "nan") return true;
+    if (!critereEtude || critereEtude === "-1" || critereEtude === "nc" || critereEtude === "nan") return true;
     var val = parseFloat(valeurPatient);
-    if (isNaN(val)) return false;
-    
     var crit = String(critereEtude).trim();
-    
-    // Intervalles (ex: "40-75")
-    if (crit.indexOf('-') > 0 && !crit.startsWith('-')) {
+    if (crit.indexOf('-') > 0) {
       var parts = crit.split('-');
-      if (parts.length === 2) return (val >= parseFloat(parts[0]) && val <= parseFloat(parts[1]));
+      return (val >= parseFloat(parts[0]) && val <= parseFloat(parts[1]));
     }
-    // Symboles
     if (crit.startsWith('<=')) return val <= parseFloat(crit.substring(2));
     if (crit.startsWith('>=')) return val >= parseFloat(crit.substring(2));
     if (crit.startsWith('<'))  return val < parseFloat(crit.substring(1));
     if (crit.startsWith('>'))  return val > parseFloat(crit.substring(1));
-    
-    // Valeur exacte
-    if (val === parseFloat(crit)) return true;
-    
-    return false;
+    return val === parseFloat(crit);
   }
 
-  /* ─── MOTEUR DE MATCHING AVANCÉ ─── */
-  function construireProfilPatient() {
-    var profil = {};
-    history.forEach(function(etape) {
-      profil[etape.question] = String(etape.label).trim();
-    });
-    return profil;
-  }
-
-  /* ─── MOTEUR DE MATCHING AVANCÉ (CORRIGÉ) ─── */
   function calculerScoreEtude(etude, profilPatient, mapping, traitementsRecommandes) {
-    let scorePoints = 0;
-    let criteresEvalues = 0;
-
-    // 1. FILTRE DU TRAITEMENT (Double Matching)
-    let traitementsEtude = etude.traitements_evalues || [];
-    let cleanRecs = traitementsRecommandes.map(r => r.toLowerCase().trim());
-    let cleanEtude = traitementsEtude.map(t => t.toLowerCase().trim());
-    let matchTraitement = (cleanRecs.length === 0) || cleanRecs.some(r => cleanEtude.includes(r));
-    
+    // 1. Filtre Traitement
+    var traitementsEtude = etude.traitements_evalues || [];
+    var cleanRecs = traitementsRecommandes.map(r => r.toLowerCase().trim());
+    var cleanEtude = traitementsEtude.map(t => t.toLowerCase().trim());
+    var matchTraitement = (cleanRecs.length === 0) || cleanRecs.some(r => cleanEtude.includes(r));
     if (!matchTraitement) return 0;
 
-    // 2. FILTRE CLINIQUE (Matching des cases Excel)
-    for (let questionArbre in profilPatient) {
-      let reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
+    // 2. Filtre Clinique
+    var scorePoints = 0, criteresEvalues = 0;
+    for (var questionArbre in profilPatient) {
+      var reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
       if (reponsePatient === "-1" || reponsePatient === "non renseigné") continue;
-
-      // Trouver la colonne correspondante dans l'étude
-      let colonneEtude = null;
-      for (let col in mapping) {
-        if (mapping[col].includes(questionArbre)) { colonneEtude = col; break; }
-      }
+      var colonneEtude = null;
+      for (var col in mapping) { if (mapping[col].includes(questionArbre)) { colonneEtude = col; break; } }
 
       if (colonneEtude && etude.hasOwnProperty(colonneEtude)) {
         criteresEvalues++;
-        let valeurCase = String(etude[colonneEtude]).toLowerCase().trim();
-
-        // JOKER : La case contient "nc", "nan" ou "-1"
-        if (valeurCase === "-1" || valeurCase === "nan" || valeurCase === "nc") {
-          scorePoints++;
-        } 
-        // MATCHING NUMÉRIQUE (Age, Ki67)
+        var vE = String(etude[colonneEtude]).toLowerCase().trim();
+        if (vE === "-1" || vE === "nan" || vE === "nc" || vE === "") { scorePoints++; }
         else if (colonneEtude.includes("Âge") || colonneEtude.includes("ki67")) {
-          if (matchNumerique(reponsePatient, valeurCase)) scorePoints++;
-        }
-        // MATCHING TEXTE (T, N, HER2...) - Utilisation de INCLUDES pour gérer les listes (ex: "T1, T2")
-        else {
-          let p = reponsePatient.replace('.0', ''); // "1.0" -> "1"
-          
-          // Gestion des synonymes médicaux
-          if ((p === "1" || p === "oui" || p === "positif") && (valeurCase.includes("1") || valeurCase.includes("positif") || valeurCase.includes("oui"))) {
-            scorePoints++;
-          } else if ((p === "0" || p === "non" || p === "négatif") && (valeurCase.includes("0") || valeurCase.includes("négatif") || valeurCase.includes("non"))) {
-            scorePoints++;
-          } else if (valeurCase.includes(p)) {
-            scorePoints++;
-          }
+          if (matchNumerique(reponsePatient, vE)) scorePoints++;
+        } else {
+          var p = reponsePatient.replace('.0', '');
+          if (vE.includes(p) || ((p === "1" || p === "oui") && vE.includes("pos"))) { scorePoints++; }
         }
       }
     }
-
     return criteresEvalues > 0 ? Math.round((scorePoints / criteresEvalues) * 100) : 100;
+  }
+
+  function cls(val) {
+    var v = String(val || '').trim();
+    if (v === '1' || v === '1.0') return 'rec';
+    if (v === '0' || v === '0.0') return 'nrec';
+    if (v === '0.5') return 'alt';
+    return 'ns';
   }
 
   function badge(val) {
@@ -234,132 +181,56 @@
   }
 
   function renderResults(donnees) {
-    $('quiz-progress-bar').style.width = '100%';
-    $('quiz-pct-label').textContent    = '100 %';
-    $('quiz-step-label').textContent   = 'Terminé';
-
-    var pathEl = $('results-path');
-    pathEl.innerHTML = '';
+    $('results-path').innerHTML = '';
     history.forEach(function (h, i) {
-      if (i > 0) {
-        var sep = document.createElement('span');
-        sep.className = 'path-sep'; sep.textContent = '›';
-        pathEl.appendChild(sep);
-      }
-      var s = document.createElement('span');
-      s.className = 'path-step'; s.textContent = humaniserLabel(h.label); 
-      pathEl.appendChild(s);
+      if (i > 0) { var sep = document.createElement('span'); sep.className = 'path-sep'; sep.textContent = '›'; $('results-path').appendChild(sep); }
+      var s = document.createElement('span'); s.className = 'path-step'; s.textContent = humaniserLabel(h.label); $('results-path').appendChild(s);
     });
 
-    var grid = $('results-grid');
-    grid.innerHTML = '';
+    var grid = $('results-grid'); grid.innerHTML = '';
     var entries = Object.keys(donnees || {}).map(function (k) {
       return { name: k.replace(/^OUT_/i, ''), val: donnees[k], cls: cls(donnees[k]) };
     });
+    entries.sort(function (a, b) { var order = { rec: 0, alt: 1, nrec: 2, ns: 3 }; return order[a.cls] - order[b.cls]; });
+    entries.forEach(function (e) {
+      var card = document.createElement('div'); card.className = 'result-card ' + e.cls;
+      card.innerHTML = `<h4>${e.name}</h4><span class="badge ${e.cls}">${badge(e.val)}</span>`;
+      grid.appendChild(card);
+    });
 
-    // Tri : Recommandé (0), Alternative (1), Non rec (2), Non spécifié (3)
-    var order = { rec: 0, alt: 1, nrec: 2, ns: 3 };
-    entries.sort(function (a, b) { return order[a.cls] - order[b.cls]; });
-
-    if (entries.length === 0) {
-      grid.innerHTML = '<p class="muted">Aucune recommandation disponible.</p>';
-    } else {
-      entries.forEach(function (e) {
-        var card = document.createElement('div');
-        card.className = 'result-card ' + e.cls;
-        var h4 = document.createElement('h4'); h4.textContent = e.name;
-        var b = document.createElement('span');
-        b.className = 'badge ' + e.cls; b.textContent = badge(e.val);
-        card.appendChild(h4); card.appendChild(b);
-        grid.appendChild(card);
-      });
-    }
-
-    renderEtudes(donnees); // On passe les recommandations pour le filtre
+    renderEtudes(donnees);
     show('screen-results');
   }
 
   function renderEtudes(donneesResultats) {
-    var container = $('etudes-container');
-    if (!container || !baseEtudes || !baseEtudes.etudes) return;
-
+    var container = $('etudes-container'); if (!container || !baseEtudes) return;
     container.innerHTML = '';
-    var profilPatient = construireProfilPatient();
-    var etudesPertinentes = [];
+    var profil = {}; history.forEach(h => { profil[h.question] = h.label; });
+    var traitementsRec = [];
+    Object.keys(donneesResultats).forEach(k => { if (["1", "1.0", "0.5"].includes(String(donneesResultats[k]))) traitementsRec.push(k.replace(/^OUT_/i, '').trim()); });
 
-    // Extraction des traitements pertinents (1.0 ou 0.5)
-    var traitementsRecommandes = [];
-    if (donneesResultats) {
-      Object.keys(donneesResultats).forEach(function(key) {
-        var val = String(donneesResultats[key]);
-        if (val === "1.0" || val === "1" || val === "0.5") {
-          traitementsRecommandes.push(key.replace(/^OUT_/i, '').trim());
-        }
-      });
-    }
+    var etudesPertinentes = baseEtudes.etudes.map(function(etude) {
+      etude.scoreMatch = calculerScoreEtude(etude, profil, baseEtudes.mapping, traitementsRec);
+      return etude;
+    }).filter(e => e.scoreMatch >= 50).sort((a,b) => b.scoreMatch - a.scoreMatch);
 
-    baseEtudes.etudes.forEach(function(etude) {
-      var score = calculerScoreEtude(etude, profilPatient, baseEtudes.mapping, traitementsRecommandes);
-      if (score >= 50) { // Limite de pertinence fixée à 50%
-        etude.scoreMatch = score;
-        etudesPertinentes.push(etude);
-      }
-    });
-
-    etudesPertinentes.sort(function(a, b) { return b.scoreMatch - a.scoreMatch; });
-
-    if (etudesPertinentes.length === 0) {
-      container.innerHTML = '<p class="muted" style="text-align:center; padding:20px;">Aucune étude spécifique correspondant à ce profil n\'est disponible.</p>';
-      return;
-    }
+    if (etudesPertinentes.length === 0) { container.innerHTML = '<p class="muted">Aucune étude correspondante.</p>'; return; }
 
     etudesPertinentes.forEach(function(etude) {
-      var card = document.createElement('div');
-      card.className = 'etude-card';
-
-      var statsHtml = '';
-      var clesStats = Object.keys(etude.outcomes || {});
-
-      if (clesStats.length > 0) {
-        clesStats.forEach(function(nomStat) {
-          statsHtml += '<div style="margin-bottom: 4px;"><strong>' + nomStat + ' :</strong> ' + etude.outcomes[nomStat] + '</div>';
-        });
-      } else {
-        statsHtml = '<div style="color: #999; font-style: italic;">Pas de données chiffrées pour cette étude.</div>';
-      }
-
+      var card = document.createElement('div'); card.className = 'etude-card';
+      var outcomes = Object.keys(etude.outcomes || {}).map(k => `<div><strong>${k}:</strong> ${etude.outcomes[k]}</div>`).join('');
       card.innerHTML = `
-        <div class="etude-header">
-            <span class="etude-score">${etude.scoreMatch}% Match</span>
-            <span class="etude-preuve">Preuve: Niveau ${etude.niveau_preuve}</span>
-        </div>
+        <div class="etude-header"><span class="etude-score">${etude.scoreMatch}% Match</span><span class="etude-preuve">Niveau ${etude.niveau_preuve}</span></div>
         <h4 class="etude-title">${etude.objectif !== '-1' ? etude.objectif : 'Étude clinique'}</h4>
-        <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
-            <strong>Testé:</strong> ${etude.traitements_evalues.join(', ') || 'NC'}
-        </div>
-        <div class="etude-stats">
-            ${statsHtml}
-        </div>
-        <a href="${etude.reference}" target="_blank" class="etude-link">Voir l'étude ↗</a>
-      `;
+        <div style="font-size:12px; margin-bottom:10px;"><strong>Testé:</strong> ${etude.traitements_evalues.join(', ')}</div>
+        <div class="etude-stats">${outcomes || 'Pas de données chiffrées.'}</div>
+        <a href="${etude.reference}" target="_blank" class="etude-link">Voir l'étude ↗</a>`;
       container.appendChild(card);
     });
   }
 
-  function recommencer() {
-    history = [];
-    current = null;
-    $('quiz-choices').innerHTML  = '';
-    $('results-grid').innerHTML  = '';
-    $('results-path').innerHTML  = '';
-    var ec = $('etudes-container'); if(ec) ec.innerHTML = '';
-    show('screen-home');
-  }
+  function recommencer() { history = []; current = null; show('screen-home'); }
 
-  window.demarrer    = demarrer;
-  window.reculer     = reculer;
-  window.recommencer = recommencer;
-  window.accueil     = recommencer;
-
+  window.demarrer = demarrer; window.reculer = reculer; window.recommencer = recommencer; window.accueil = recommencer;
   load();
 }());
