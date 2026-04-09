@@ -399,6 +399,69 @@
     .etude-link:hover {
       text-decoration: underline;
     }
+    /* ─────────────────────────────────────────
+       BOUTON "JE NE SAIS PAS"
+    ───────────────────────────────────────── */
+    .skip-separator {
+      border-top: 1px dashed var(--border);
+      margin: 12px 0 8px;
+    }
+    .choice-btn.skip-btn {
+      border-color: #d1d5db;
+      color: var(--muted);
+      font-style: italic;
+      background: var(--white);
+      font-size: 14px;
+    }
+    .choice-btn.skip-btn:hover {
+      border-color: var(--muted);
+      background: #f5f5f5;
+      transform: translateX(2px);
+      color: var(--text);
+    }
+    .choice-btn.skip-btn .arrow { color: var(--muted); }
+    .choice-btn.skip-btn:hover .arrow { opacity: 1; color: var(--text); }
+
+    /* ─────────────────────────────────────────
+       PARCOURS CLINIQUE
+    ───────────────────────────────────────── */
+    .path-step-nr {
+      background: rgba(255,255,255,.12) !important;
+      font-style: italic;
+      opacity: 0.75;
+    }
+
+    /* ─────────────────────────────────────────
+       AVERTISSEMENT DONNÉES INCOMPLÈTES
+    ───────────────────────────────────────── */
+    .warning-nr {
+      background: #fff7ed;
+      border-color: #fed7aa;
+      color: #9a3412;
+    }
+
+    /* ─────────────────────────────────────────
+       CRITÈRES D'INCLUSION DES ÉTUDES
+    ───────────────────────────────────────── */
+    .etude-traitements {
+      font-size: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+    }
+    .etude-criteres {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .critere-tag {
+      background: #f0f4ff;
+      color: #3730a3;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid #c7d2fe;
+    }
 
     /* ─────────────────────────────────────────
        RESPONSIVE
