@@ -4,7 +4,7 @@ import json
 # ═══════════════════════════════════════════════════════════════════
 #  CONFIG
 # ═══════════════════════════════════════════════════════════════════
-FICHIER_EXCEL     = "Senorif.xlsx" # Modifie le nom si besoin
+FICHIER_EXCEL     = "ATLAS_COMPLET.xlsx"
 FICHIER_ARBRE     = "arbre_dynamique.json"
 FICHIER_ETUDES    = "base_etudes.json"
 
