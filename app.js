@@ -7,11 +7,11 @@
   'use strict';
 
   /* ─── État ───────────────────────────────────────────────── */
-  var tree       = null;   // Racine de l'arbre
-  var baseEtudes = null;   // Données des études et mapping
-  var current    = null;   // Nœud en cours
-  var history    = [];     // Pile : [{node, label, question}, …]
-  var maxDepth   = 1;      // Pour la barre de progression
+  var tree       = null;
+  var baseEtudes = null;
+  var current    = null;
+  var history    = [];
+  var maxDepth   = 1;
 
   /* ─── Raccourci ──────────────────────────────────────────── */
   function $(id) { return document.getElementById(id); }
@@ -32,24 +32,20 @@
   }
 
   function load() {
-    var v = '?_v=' + Date.now(); // Anti-cache GitHub Pages
-    
-    // On charge les deux fichiers en même temps
+    var v = '?_v=' + Date.now();
     Promise.all([
-      fetch('arbre_dynamique.json' + v).then(function(r) { 
-          if (!r.ok) throw new Error('Arbre HTTP ' + r.status); return r.json(); 
+      fetch('arbre_dynamique.json' + v).then(function(r) {
+          if (!r.ok) throw new Error('Arbre HTTP ' + r.status); return r.json();
       }),
-      fetch('base_etudes.json' + v).then(function(r) { 
+      fetch('base_etudes.json' + v).then(function(r) {
           if (!r.ok) { console.warn('Base études introuvable, suite sans études.'); return null; }
-          return r.json(); 
-      }).catch(function() { return null; }) // Fallback si le JSON études n'est pas encore là
+          return r.json();
+      }).catch(function() { return null; })
     ])
     .then(function (results) {
       tree       = results[0];
       baseEtudes = results[1];
       maxDepth   = depth(tree, 0) || 1;
-
-      /* Activer les boutons d'accueil */
       var bs = $('btn-start'), bh = $('btn-start-hero');
       if (bs) { bs.disabled = false; bs.textContent = 'Commencer →'; }
       if (bh) { bh.disabled = false; bh.textContent = 'Commencer l\'évaluation →'; }
@@ -88,6 +84,18 @@
      3. AFFICHER LE QUESTIONNAIRE ET TRACER LE PROFIL
   ════════════════════════════════════════════════════════════ */
 
+  /* Traduit une valeur brute de l'arbre en texte lisible */
+  function humaniserLabel(val) {
+    var v = String(val || '').trim();
+    if (v === '1.0')  v = '1';
+    if (v === '0.0')  v = '0';
+    if (v === '-1.0') v = '-1';
+    if (v === '-1') return 'Non renseigné';
+    if (v === '0')  return 'Non';
+    if (v === '1')  return 'Oui';
+    return v;
+  }
+
   function render(node) {
     if (node.type === 'resultat') {
       renderResults(node.donnees);
@@ -97,7 +105,6 @@
     var questionTitre = node.titre || '(Question)';
     $('quiz-question').textContent = questionTitre;
 
-    /* Progression */
     var step  = history.length + 1;
     var total = maxDepth || step;
     var pct   = Math.round(Math.max(0, (step - 1) / total) * 100);
@@ -122,7 +129,7 @@
       btn.className = 'choice-btn';
 
       var txt = document.createElement('span');
-      txt.textContent = label;
+      txt.textContent = humaniserLabel(label);  // ← CORRECTION labels
       btn.appendChild(txt);
 
       var arr = document.createElement('span');
@@ -132,7 +139,6 @@
 
       btn.addEventListener('click', (function (l, n, q) {
         return function () {
-          // On sauvegarde la question ET la réponse pour le profil
           history.push({ node: current, label: l, question: q });
           current = n;
           render(current);
@@ -157,7 +163,6 @@
   function construireProfilPatient() {
     var profil = {};
     history.forEach(function(etape) {
-      // Ex: profil["T1b"] = "1"
       profil[etape.question] = String(etape.label).trim();
     });
     return profil;
@@ -169,8 +174,7 @@
 
     for (var questionArbre in profilPatient) {
       var reponsePatient = profilPatient[questionArbre].toLowerCase();
-      
-      // Trouver la colonne d'étude qui correspond à cette question (grâce au mapping Feuil3)
+
       var colonneEtude = null;
       for (var colEtude in mapping) {
         if (mapping[colEtude].includes(questionArbre)) {
@@ -180,25 +184,25 @@
       }
 
       if (colonneEtude && etude.criteres.hasOwnProperty(colonneEtude)) {
+        // Critère non renseigné côté patient → ignoré (ne pénalise pas)
+        if (reponsePatient === "-1" || reponsePatient === "-1.0") continue;
+
         criteresEvalues++;
         var valeurEtude = String(etude.criteres[colonneEtude]).trim().toLowerCase();
 
-        // "-1" ou "nan" signifie que l'étude n'a pas filtré sur ce critère = Match automatique
-        if (valeurEtude === "-1" || valeurEtude === "nan") {
+        // "nc" = Non Communiqué → match automatique, comme "-1" et "nan"
+        if (valeurEtude === "-1" || valeurEtude === "nan" || valeurEtude === "nc") {
           score++;
         } else {
-          // Match simple : si le patient a "1" ou "oui", on vérifie si l'étude l'inclut textuellement
           var qBase = questionArbre.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (reponsePatient === "1" || reponsePatient === "oui" || reponsePatient === "positif") {
-            if (valeurEtude.indexOf(qBase) !== -1 || valeurEtude.indexOf(qBase.substring(0,2)) !== -1 || valeurEtude === "positif" || valeurEtude === "1") {
+          if (reponsePatient === "1" || reponsePatient === "1.0" || reponsePatient === "oui" || reponsePatient === "positif") {
+            if (valeurEtude.indexOf(qBase) !== -1 || valeurEtude === "positif" || valeurEtude === "1") {
               score++;
             }
-          } 
-          // Si le patient a "0" ou "non"
-          else if (reponsePatient === "0" || reponsePatient === "non" || reponsePatient === "négatif") {
-             if (valeurEtude === "négatif" || valeurEtude === "non" || valeurEtude === "0") {
-               score++;
-             }
+          } else if (reponsePatient === "0" || reponsePatient === "0.0" || reponsePatient === "non" || reponsePatient === "négatif") {
+            if (valeurEtude === "négatif" || valeurEtude === "non" || valeurEtude === "0") {
+              score++;
+            }
           }
         }
       }
@@ -229,7 +233,6 @@
     $('quiz-pct-label').textContent    = '100 %';
     $('quiz-step-label').textContent   = 'Terminé';
 
-    /* Parcours */
     var pathEl = $('results-path');
     pathEl.innerHTML = '';
     history.forEach(function (h, i) {
@@ -239,11 +242,10 @@
         pathEl.appendChild(sep);
       }
       var s = document.createElement('span');
-      s.className = 'path-step'; s.textContent = h.label;
+      s.className = 'path-step'; s.textContent = humaniserLabel(h.label);  // ← CORRECTION parcours
       pathEl.appendChild(s);
     });
 
-    /* Grille Traitements SENORIF */
     var grid = $('results-grid');
     grid.innerHTML = '';
     var entries = Object.keys(donnees || {}).map(function (k) {
@@ -267,21 +269,18 @@
       });
     }
 
-    /* Injection des Études Statistiques */
     renderEtudes();
-
     show('screen-results');
   }
 
   function renderEtudes() {
     var container = $('etudes-container');
-    if (!container || !baseEtudes || !baseEtudes.etudes) return; 
-    
+    if (!container || !baseEtudes || !baseEtudes.etudes) return;
+
     container.innerHTML = '';
     var profilPatient = construireProfilPatient();
     var etudesPertinentes = [];
 
-    // Calcul du score
     baseEtudes.etudes.forEach(function(etude) {
       var score = calculerScoreEtude(etude, profilPatient, baseEtudes.mapping);
       if (score >= 50) {
@@ -300,17 +299,16 @@
     etudesPertinentes.forEach(function(etude) {
       var card = document.createElement('div');
       card.className = 'etude-card';
-      
-      // On construit dynamiquement le bloc des statistiques
+
       var statsHtml = '';
       var clesStats = Object.keys(etude.outcomes || {});
-      
+
       if (clesStats.length > 0) {
-          clesStats.forEach(function(nomStat) {
-              statsHtml += '<div style="margin-bottom: 4px;"><strong>' + nomStat + ' :</strong> ' + etude.outcomes[nomStat] + '</div>';
-          });
+        clesStats.forEach(function(nomStat) {
+          statsHtml += '<div style="margin-bottom: 4px;"><strong>' + nomStat + ' :</strong> ' + etude.outcomes[nomStat] + '</div>';
+        });
       } else {
-          statsHtml = '<div style="color: #999; font-style: italic;">Pas de données chiffrées standardisées pour cette étude.</div>';
+        statsHtml = '<div style="color: #999; font-style: italic;">Pas de données chiffrées standardisées pour cette étude.</div>';
       }
 
       card.innerHTML = `
@@ -341,12 +339,10 @@
     show('screen-home');
   }
 
-  /* Fonctions globales pour le HTML */
   window.demarrer    = demarrer;
   window.reculer     = reculer;
   window.recommencer = recommencer;
   window.accueil     = recommencer;
 
-  /* ─── Lancement ─── */
   load();
 }());
