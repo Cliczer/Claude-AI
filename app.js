@@ -170,73 +170,74 @@
     return profil;
   }
 
+  /* ─── MOTEUR DE MATCHING AVANCÉ (CORRIGÉ) ─── */
   function calculerScoreEtude(etude, profilPatient, mapping, traitementsRecommandes) {
-    // 1. FILTRE DU TRAITEMENT (L'étude teste-t-elle ce qu'on recommande ?)
+    // 1. FILTRE DU TRAITEMENT (Double Matching)
     var traitementsEtude = etude.traitements_evalues || [];
     var matchTraitement = false;
     
     if (traitementsEtude.length === 0 || traitementsRecommandes.length === 0) {
-        matchTraitement = true; // Tolérance si données absentes
+        matchTraitement = true; 
     } else {
-        for (var i = 0; i < traitementsRecommandes.length; i++) {
-            if (traitementsEtude.includes(traitementsRecommandes[i])) {
-                matchTraitement = true;
-                break;
-            }
-        }
+        // Nettoyage des noms pour comparaison
+        var cleanRecs = traitementsRecommandes.map(r => r.toLowerCase().trim());
+        var cleanEtude = traitementsEtude.map(t => t.toLowerCase().trim());
+        
+        matchTraitement = cleanRecs.some(r => cleanEtude.includes(r));
     }
     
-    if (!matchTraitement) return 0; // Si le traitement ne correspond pas, score 0 direct.
+    if (!matchTraitement) return 0;
 
     // 2. FILTRE DU PROFIL CLINIQUE
-    var score = 0;
+    var scorePoints = 0;
     var criteresEvalues = 0;
 
+    // On parcourt les réponses du patient
     for (var questionArbre in profilPatient) {
-      var reponsePatient = profilPatient[questionArbre].toLowerCase();
+      var reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
+      if (reponsePatient === "-1" || reponsePatient === "-1.0" || reponsePatient === "non renseigné") continue;
 
+      // Trouver quelle colonne de l'étude correspond à cette question
       var colonneEtude = null;
-      for (var colEtude in mapping) {
-        if (mapping[colEtude].includes(questionArbre)) {
-          colonneEtude = colEtude;
+      for (var col in mapping) {
+        if (mapping[col].includes(questionArbre)) {
+          colonneEtude = col;
           break;
         }
       }
 
-      if (colonneEtude && etude.criteres.hasOwnProperty(colonneEtude)) {
-        if (reponsePatient === "-1" || reponsePatient === "-1.0") continue;
-
+      // Si on a trouvé une colonne correspondante dans l'étude
+      if (colonneEtude && etude.hasOwnProperty(colonneEtude)) {
         criteresEvalues++;
-        var valeurEtude = String(etude.criteres[colonneEtude]).trim().toLowerCase();
+        var valeurEtude = String(etude[colonneEtude]).trim().toLowerCase();
 
-        if (valeurEtude === "-1" || valeurEtude === "nan" || valeurEtude === "nc") {
-          score++;
+        // JOKER : Si l'étude accepte tout le monde sur ce critère
+        if (valeurEtude === "-1" || valeurEtude === "nan" || valeurEtude === "nc" || valeurEtude === "") {
+          scorePoints++;
         } 
-        else if (colonneEtude === "Age" || colonneEtude === "Ki67 (%)" || colonneEtude === "Marges (mm)") {
-          if (matchNumerique(reponsePatient, valeurEtude)) score++;
+        // CAS NUMÉRIQUE (Age, Ki67)
+        else if (colonneEtude.indexOf("Âge") !== -1 || colonneEtude.indexOf("ki67") !== -1) {
+          if (matchNumerique(reponsePatient, valeurEtude)) scorePoints++;
         }
+        // CAS TEXTE (T, N, HER2...)
         else {
-          var qBase = questionArbre.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (reponsePatient === "1" || reponsePatient === "1.0" || reponsePatient === "oui" || reponsePatient === "positif") {
-            if (valeurEtude.indexOf(qBase) !== -1 || valeurEtude === "positif" || valeurEtude === "1") score++;
-          } else if (reponsePatient === "0" || reponsePatient === "0.0" || reponsePatient === "non" || reponsePatient === "négatif") {
-            if (valeurEtude === "négatif" || valeurEtude === "non" || valeurEtude === "0") score++;
-          } else if (valeurEtude.indexOf(reponsePatient) !== -1 || valeurEtude.indexOf(reponsePatient.replace('.0', '')) !== -1) {
-            score++;
+          // Simplification des valeurs pour comparaison (ex: "1.0" -> "1")
+          var p = reponsePatient.replace('.0', '');
+          var e = valeurEtude.replace('.0', '');
+
+          if (e.includes(p) || p.includes(e)) {
+            scorePoints++;
+          } else if ((p === "oui" || p === "1" || p === "positif") && (e === "1" || e === "positif" || e === "oui")) {
+            scorePoints++;
+          } else if ((p === "non" || p === "0" || p === "négatif") && (e === "0" || e === "négatif" || e === "non")) {
+            scorePoints++;
           }
         }
       }
     }
-    return criteresEvalues > 0 ? Math.round((score / criteresEvalues) * 100) : 0;
-  }
 
-  /* ─── AFFICHAGE RÉSULTATS (Avec gestion du 0.5) ─── */
-  function cls(val) {
-    var v = String(val || '').trim();
-    if (v === '1' || v === '1.0') return 'rec';
-    if (v === '0' || v === '0.0') return 'nrec';
-    if (v === '0.5') return 'alt';
-    return 'ns';
+    // Calcul final du score en %
+    return criteresEvalues > 0 ? Math.round((scorePoints / criteresEvalues) * 100) : 100;
   }
 
   function badge(val) {
