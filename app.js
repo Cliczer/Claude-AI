@@ -1,24 +1,18 @@
 /*
- * Atlas Pronostics — app.js (Version avec Moteur de Matching)
- * Vanilla JS pur, aucune dépendance.
+ * Atlas Pronostics — app.js (Version Corrigée)
  */
 
 (function () {
   'use strict';
 
-  /* ─── État ───────────────────────────────────────────────── */
-  var tree       = null;   // Racine de l'arbre
-  var baseEtudes = null;   // Données des études et mapping
-  var current    = null;   // Nœud en cours
-  var history    = [];     // Pile : [{node, label, question}, …]
-  var maxDepth   = 1;      // Pour la barre de progression
+  var tree       = null;
+  var baseEtudes = null;
+  window.baseEtudes = null;
+  var current    = null;
+  var history    = [];
+  var maxDepth   = 1;
 
-  /* ─── Raccourci ──────────────────────────────────────────── */
   function $(id) { return document.getElementById(id); }
-
-  /* ════════════════════════════════════════════════════════════
-     1. CHARGEMENT SIMULTANÉ DES DEUX JSON
-  ════════════════════════════════════════════════════════════ */
 
   function depth(node, d) {
     if (!node || node.type === 'resultat' || !node.choix) return d;
@@ -32,76 +26,64 @@
   }
 
   function load() {
-    var v = '?_v=' + Date.now(); // Anti-cache GitHub Pages
-    
-    // On charge les deux fichiers en même temps
+    var v = '?_v=' + Date.now();
     Promise.all([
-      fetch('arbre_dynamique.json' + v).then(function(r) { 
-          if (!r.ok) throw new Error('Arbre HTTP ' + r.status); return r.json(); 
+      fetch('arbre_dynamique.json' + v).then(function(r) {
+          if (!r.ok) throw new Error('Arbre HTTP ' + r.status); return r.json();
       }),
-      fetch('base_etudes.json' + v).then(function(r) { 
-          if (!r.ok) { console.warn('Base études introuvable, suite sans études.'); return null; }
-          return r.json(); 
-      }).catch(function() { return null; }) // Fallback si le JSON études n'est pas encore là
+      fetch('base_etudes.json' + v).then(function(r) {
+          if (!r.ok) { console.warn('Base études introuvable.'); return null; }
+          return r.json();
+      }).catch(function() { return null; })
     ])
     .then(function (results) {
       tree       = results[0];
       baseEtudes = results[1];
+      window.baseEtudes = results[1];
       maxDepth   = depth(tree, 0) || 1;
-
-      /* Activer les boutons d'accueil */
       var bs = $('btn-start'), bh = $('btn-start-hero');
       if (bs) { bs.disabled = false; bs.textContent = 'Commencer →'; }
       if (bh) { bh.disabled = false; bh.textContent = 'Commencer l\'évaluation →'; }
     })
     .catch(function (err) {
-      console.error('[Atlas] Erreur fatale au chargement :', err);
-      alert('Erreur lors du chargement des données. Vérifiez que arbre_dynamique.json est présent.\n' + err.message);
+      console.error('[Atlas] Erreur fatale:', err);
     });
   }
-
-  /* ════════════════════════════════════════════════════════════
-     2. NAVIGATION & VUES
-  ════════════════════════════════════════════════════════════ */
 
   function show(id) {
     ['screen-home', 'screen-quiz', 'screen-results'].forEach(function (sid) {
       var el = $(sid);
-      if (!el) return;
-      el.classList.toggle('active', sid === id);
+      if (el) el.classList.toggle('active', sid === id);
     });
     window.scrollTo(0, 0);
   }
 
   function demarrer() {
-    if (!tree) {
-      alert('Chargement en cours... Réessayez dans une seconde.');
-      return;
-    }
+    if (!tree) return alert('Chargement en cours...');
     history = [];
     current = tree;
     show('screen-quiz');
     render(current);
   }
 
-  /* ════════════════════════════════════════════════════════════
-     3. AFFICHER LE QUESTIONNAIRE ET TRACER LE PROFIL
-  ════════════════════════════════════════════════════════════ */
+  function humaniserLabel(val) {
+    var v = String(val || '').trim();
+    if (v === '1.0' || v === '1') return 'Oui / Positif';
+    if (v === '0.0' || v === '0') return 'Non / Négatif';
+    if (v === '-1.0' || v === '-1') return 'Non renseigné';
+    return v;
+  }
 
   function render(node) {
     if (node.type === 'resultat') {
       renderResults(node.donnees);
       return;
     }
-
     var questionTitre = node.titre || '(Question)';
     $('quiz-question').textContent = questionTitre;
-
-    /* Progression */
     var step  = history.length + 1;
     var total = maxDepth || step;
     var pct   = Math.round(Math.max(0, (step - 1) / total) * 100);
-
     $('quiz-step-label').textContent   = 'Étape ' + step + ' / ' + total;
     $('quiz-pct-label').textContent    = pct + ' %';
     $('quiz-progress-bar').style.width = pct + '%';
@@ -110,243 +92,344 @@
     var container = $('quiz-choices');
     container.innerHTML = '';
     var keys = Object.keys(node.choix || {});
-
-    if (keys.length === 0) {
-      container.innerHTML = '<p class="muted">Aucune option disponible.</p>';
-      return;
-    }
-
     keys.forEach(function (label) {
       var next = node.choix[label];
       var btn = document.createElement('button');
       btn.className = 'choice-btn';
-
       var txt = document.createElement('span');
-      txt.textContent = label;
+      txt.textContent = humaniserLabel(label);
       btn.appendChild(txt);
-
       var arr = document.createElement('span');
-      arr.className = 'arrow';
-      arr.textContent = '→';
+      arr.className = 'arrow'; arr.textContent = '→';
       btn.appendChild(arr);
-
-      btn.addEventListener('click', (function (l, n, q) {
-        return function () {
-          // On sauvegarde la question ET la réponse pour le profil
-          history.push({ node: current, label: l, question: q });
-          current = n;
-          render(current);
-        };
-      }(label, next, questionTitre)));
-
+      btn.addEventListener('click', function () {
+        history.push({ node: current, label: label, question: questionTitre });
+        current = next;
+        render(current);
+      });
       container.appendChild(btn);
     });
+
+    // Bouton "Je ne sais pas / Non renseigné"
+    var separator = document.createElement('div');
+    separator.className = 'skip-separator';
+    container.appendChild(separator);
+
+    var btnSkip = document.createElement('button');
+    btnSkip.className = 'choice-btn skip-btn';
+    var skipTxt = document.createElement('span');
+    skipTxt.textContent = 'Je ne sais pas / Non renseigné';
+    btnSkip.appendChild(skipTxt);
+    var skipArr = document.createElement('span');
+    skipArr.className = 'arrow'; skipArr.textContent = '?';
+    btnSkip.appendChild(skipArr);
+    btnSkip.addEventListener('click', (function(capturedNode, capturedTitre) {
+      return function () {
+        history.push({ node: capturedNode, label: '-1', question: capturedTitre, nonRenseigne: true });
+        var allResults = collecterTousResultats(capturedNode);
+        var donneesMerged = fusionnerResultats(allResults);
+        renderResults(donneesMerged, true);
+      };
+    })(current, questionTitre));
+    container.appendChild(btnSkip);
   }
 
   function reculer() {
     if (history.length === 0) return;
-    var prev = history.pop();
-    current  = prev.node;
+    current = history.pop().node;
     render(current);
   }
 
-  /* ════════════════════════════════════════════════════════════
-     4. MOTEUR DE MATCHING DES ÉTUDES (100% Dynamique)
-  ════════════════════════════════════════════════════════════ */
-
-  function construireProfilPatient() {
-    var profil = {};
-    history.forEach(function(etape) {
-      // Ex: profil["T1b"] = "1"
-      profil[etape.question] = String(etape.label).trim();
-    });
-    return profil;
+  /* ─── COLLECTE ET FUSION DES RÉSULTATS (pour "Je ne sais pas") ─── */
+  function collecterTousResultats(node) {
+    if (!node) return [];
+    if (node.type === 'resultat') return [node.donnees];
+    return Object.values(node.choix || {}).reduce(function(acc, child) {
+      return acc.concat(collecterTousResultats(child));
+    }, []);
   }
 
-  function calculerScoreEtude(etude, profilPatient, mapping) {
-    var score = 0;
-    var criteresEvalues = 0;
-
-    for (var questionArbre in profilPatient) {
-      var reponsePatient = profilPatient[questionArbre].toLowerCase();
-      
-      // Trouver la colonne d'étude qui correspond à cette question (grâce au mapping Feuil3)
-      var colonneEtude = null;
-      for (var colEtude in mapping) {
-        if (mapping[colEtude].includes(questionArbre)) {
-          colonneEtude = colEtude;
-          break;
-        }
-      }
-
-      if (colonneEtude && etude.criteres.hasOwnProperty(colonneEtude)) {
-        criteresEvalues++;
-        var valeurEtude = String(etude.criteres[colonneEtude]).trim().toLowerCase();
-
-        // "-1" ou "nan" signifie que l'étude n'a pas filtré sur ce critère = Match automatique
-        if (valeurEtude === "-1" || valeurEtude === "nan") {
-          score++;
+  function fusionnerResultats(listeResultats) {
+    if (!listeResultats.length) return {};
+    // Priorité : "1" (recommandé) > "0.5" (alternatif) > "-1" (NS) > "0" (non rec)
+    var prio = {'1': 4, '1.0': 4, '0.5': 3, '-1': 2, '0': 1, '0.0': 1};
+    var merged = {};
+    listeResultats.forEach(function(res) {
+      Object.keys(res || {}).forEach(function(key) {
+        var v = String(res[key]);
+        if (!merged.hasOwnProperty(key)) {
+          merged[key] = v;
         } else {
-          // Match simple : si le patient a "1" ou "oui", on vérifie si l'étude l'inclut textuellement
-          var qBase = questionArbre.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (reponsePatient === "1" || reponsePatient === "oui" || reponsePatient === "positif") {
-            if (valeurEtude.indexOf(qBase) !== -1 || valeurEtude.indexOf(qBase.substring(0,2)) !== -1 || valeurEtude === "positif" || valeurEtude === "1") {
-              score++;
-            }
-          } 
-          // Si le patient a "0" ou "non"
-          else if (reponsePatient === "0" || reponsePatient === "non" || reponsePatient === "négatif") {
-             if (valeurEtude === "négatif" || valeurEtude === "non" || valeurEtude === "0") {
-               score++;
-             }
+          if ((prio[v] || 0) > (prio[merged[key]] || 0)) {
+            merged[key] = v;
           }
         }
+      });
+    });
+    return merged;
+  }
+
+  /* ─── MOTEUR DE MATCHING (CORRIGÉ) ─── */
+
+  /**
+   * Trouve la colonne critère d'étude correspondant à un titre de question de l'arbre.
+   * Gère les variations de nommage (RE-, HER2+, Ki67 (%), etc.)
+   */
+  function trouverColonneCritere(questionTitre, mapping) {
+    // 1. Correspondance exacte avec les valeurs du mapping (noms de colonnes d'étude)
+    for (var key in mapping) {
+      if (mapping[key] === questionTitre) return mapping[key];
+    }
+    // 2. Correspondance exacte avec les clés du mapping
+    if (mapping.hasOwnProperty(questionTitre)) return mapping[questionTitre];
+
+    // 3. Normalisation : on retire les caractères non alphanumériques pour comparaison souple
+    function normaliser(s) {
+      return String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+    var qtNorm = normaliser(questionTitre);
+
+    for (var k in mapping) {
+      var kNorm = normaliser(k);
+      var vNorm = normaliser(mapping[k]);
+      // Correspondance normalisée exacte
+      if (qtNorm === kNorm || qtNorm === vNorm) return mapping[k];
+      // La question commence par la clé (ex: "RE-" commence par "re")
+      if (qtNorm.startsWith(kNorm) && kNorm.length >= 2) return mapping[k];
+      // La clé commence par la question (cas rare)
+      if (kNorm.startsWith(qtNorm) && qtNorm.length >= 2) return mapping[k];
+    }
+    return null;
+  }
+
+  function matchNumerique(valeurPatient, critereEtude) {
+    if (!critereEtude || critereEtude === '-1' || critereEtude === 'nc' || critereEtude === 'nan') return true;
+    var val = parseFloat(valeurPatient);
+    if (isNaN(val)) return false;
+    var crit = String(critereEtude).trim();
+    // Plage avec tiret (ex: "20-40"), en évitant les négatifs
+    var rangeMatch = crit.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+    if (rangeMatch) return val >= parseFloat(rangeMatch[1]) && val <= parseFloat(rangeMatch[2]);
+    if (crit.startsWith('<=')) return val <= parseFloat(crit.substring(2));
+    if (crit.startsWith('>=')) return val >= parseFloat(crit.substring(2));
+    if (crit.startsWith('<'))  return val < parseFloat(crit.substring(1));
+    if (crit.startsWith('>'))  return val > parseFloat(crit.substring(1));
+    return val === parseFloat(crit);
+  }
+
+  function estPositif(val) {
+    var v = val.toLowerCase().trim();
+    return v === '1' || v === 'oui' || v === 'positif' || v === 'pos' ||
+           v.endsWith('+') || v.includes('positif');
+  }
+
+  function estNegatif(val) {
+    var v = val.toLowerCase().trim();
+    return v === '0' || v === 'non' || v === 'négatif' || v === 'negatif' || v === 'neg' ||
+           (v.length > 1 && v.endsWith('-')) || v.includes('négatif') || v.includes('negatif');
+  }
+
+  function matchCategoriel(reponsePatient, critereEtude) {
+    var p  = reponsePatient.toLowerCase().trim().replace(/\.0$/, '');
+    var vE = critereEtude.toLowerCase().trim();
+
+    // Inclusion directe
+    if (vE.includes(p)) return true;
+
+    // Correspondance sémantique positif/négatif
+    if (estPositif(p) && (vE.includes('positif') || vE.includes('pos'))) return true;
+    if (estNegatif(p) && (vE.includes('négatif') || vE.includes('negatif') || vE.includes('neg'))) return true;
+
+    return false;
+  }
+
+  function calculerScoreEtude(etude, profilPatient, mapping, traitementsRecommandes) {
+    // 1. Filtre Traitement
+    var traitementsEtude = etude.traitements_evalues || [];
+    var cleanRecs  = traitementsRecommandes.map(function(r) { return r.toLowerCase().trim(); });
+    var cleanEtude = traitementsEtude.map(function(t) { return t.toLowerCase().trim(); });
+    var matchTraitement = (cleanRecs.length === 0) || cleanRecs.some(function(r) { return cleanEtude.includes(r); });
+    if (!matchTraitement) return 0;
+
+    // 2. Filtre Clinique
+    var criteres = etude.criteres || {};
+    var scorePoints = 0, criteresEvalues = 0;
+
+    for (var questionArbre in profilPatient) {
+      var reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
+      // Ignorer les réponses "non renseigné" : elles ne comptent ni pour ni contre
+      if (reponsePatient === '-1' || reponsePatient === 'non renseigné' || reponsePatient === 'non_renseigne') continue;
+
+      // Trouver la colonne critère correspondante dans l'étude
+      var colonneCritere = trouverColonneCritere(questionArbre, mapping);
+      if (!colonneCritere || !criteres.hasOwnProperty(colonneCritere)) continue;
+
+      criteresEvalues++;
+      var vE = String(criteres[colonneCritere]).toLowerCase().trim();
+
+      if (vE === '-1' || vE === 'nan' || vE === 'nc' || vE === '') {
+        // L'étude n'a pas de critère restrictif sur ce point → match automatique
+        scorePoints++;
+      } else if (colonneCritere.toLowerCase().includes('age') || colonneCritere.toLowerCase().includes('ki67')) {
+        if (matchNumerique(reponsePatient, vE)) scorePoints++;
+      } else {
+        if (matchCategoriel(reponsePatient, vE)) scorePoints++;
       }
     }
-    return criteresEvalues > 0 ? Math.round((score / criteresEvalues) * 100) : 0;
+
+    return criteresEvalues > 0 ? Math.round((scorePoints / criteresEvalues) * 100) : 100;
   }
 
-  /* ════════════════════════════════════════════════════════════
-     5. AFFICHAGE DES RÉSULTATS ET DES ÉTUDES
-  ════════════════════════════════════════════════════════════ */
+  function renderResults(donnees, donneesIncompletes) {
+    // 1. Barre de progression à 100 %
+    if ($('quiz-progress-bar')) $('quiz-progress-bar').style.width = '100%';
+    if ($('quiz-pct-label')) $('quiz-pct-label').textContent = '100 %';
+    if ($('quiz-step-label')) $('quiz-step-label').textContent = 'Terminé';
 
-  function cls(val) {
-    var v = String(val || '').trim();
-    if (v === '1' || v === '1.0') return 'rec';
-    if (v === '0' || v === '0.0') return 'nrec';
-    return 'ns';
-  }
-
-  function badge(val) {
-    var v = String(val || '').trim();
-    if (v === '1' || v === '1.0') return '✓ Recommandé';
-    if (v === '0' || v === '0.0') return '✗ Non recommandé';
-    return 'Non spécifié';
-  }
-
-  function renderResults(donnees) {
-    $('quiz-progress-bar').style.width = '100%';
-    $('quiz-pct-label').textContent    = '100 %';
-    $('quiz-step-label').textContent   = 'Terminé';
-
-    /* Parcours */
+    // 2. Parcours clinique
     var pathEl = $('results-path');
-    pathEl.innerHTML = '';
-    history.forEach(function (h, i) {
-      if (i > 0) {
-        var sep = document.createElement('span');
-        sep.className = 'path-sep'; sep.textContent = '›';
-        pathEl.appendChild(sep);
-      }
-      var s = document.createElement('span');
-      s.className = 'path-step'; s.textContent = h.label;
-      pathEl.appendChild(s);
-    });
-
-    /* Grille Traitements SENORIF */
-    var grid = $('results-grid');
-    grid.innerHTML = '';
-    var entries = Object.keys(donnees || {}).map(function (k) {
-      return { name: k.replace(/^OUT_/i, ''), val: donnees[k], cls: cls(donnees[k]) };
-    });
-
-    var order = { rec: 0, nrec: 1, ns: 2 };
-    entries.sort(function (a, b) { return order[a.cls] - order[b.cls]; });
-
-    if (entries.length === 0) {
-      grid.innerHTML = '<p class="muted">Aucune recommandation disponible.</p>';
-    } else {
-      entries.forEach(function (e) {
-        var card = document.createElement('div');
-        card.className = 'result-card ' + e.cls;
-        var h4 = document.createElement('h4'); h4.textContent = e.name;
-        var b = document.createElement('span');
-        b.className = 'badge ' + e.cls; b.textContent = badge(e.val);
-        card.appendChild(h4); card.appendChild(b);
-        grid.appendChild(card);
+    if (pathEl) {
+      pathEl.innerHTML = '';
+      history.forEach(function(h, i) {
+        if (i > 0) {
+          var sep = document.createElement('span');
+          sep.className = 'path-sep'; sep.textContent = '›';
+          pathEl.appendChild(sep);
+        }
+        var step = document.createElement('span');
+        step.className = 'path-step' + (h.nonRenseigne ? ' path-step-nr' : '');
+        step.textContent = h.question + ' : ' + (h.nonRenseigne ? '?' : humaniserLabel(h.label));
+        pathEl.appendChild(step);
       });
     }
 
-    /* Injection des Études Statistiques */
-    renderEtudes();
+    // 3. Avertissement données incomplètes
+    var resultsBody = document.querySelector('#screen-results .results-body');
+    var existingWarnNR = document.getElementById('warning-nr');
+    if (existingWarnNR) existingWarnNR.remove();
+    if (donneesIncompletes && resultsBody) {
+      var warnNR = document.createElement('div');
+      warnNR.id = 'warning-nr';
+      warnNR.className = 'warning-box warning-nr';
+      warnNR.style.marginBottom = '20px';
+      warnNR.innerHTML = '<strong>⚠️ Données incomplètes :</strong> Une ou plusieurs questions n\'ont pas reçu de réponse. Les recommandations ci-dessous représentent l\'ensemble des cas possibles et ne sont pas spécifiques à cette patiente. Une évaluation en RCP est fortement conseillée.';
+      var grid = $('results-grid');
+      if (grid) resultsBody.insertBefore(warnNR, grid);
+    }
 
+    // 4. Grille des recommandations
+    var grid = $('results-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    var recsPourEtudes = [];
+    Object.keys(donnees || {}).forEach(function (key) {
+      var scoreBrut = String(donnees[key]);
+      var typeCls = 'ns';
+      var labelBadge = 'Non spécifié';
+
+      if (scoreBrut === '1' || scoreBrut === '1.0') {
+        typeCls = 'rec'; labelBadge = '✓ Recommandé';
+        recsPourEtudes.push(key.replace(/^OUT_/i, '').trim());
+      } else if (scoreBrut === '0' || scoreBrut === '0.0') {
+        typeCls = 'nrec'; labelBadge = '✗ Non recommandé';
+      } else if (scoreBrut === '0.5') {
+        typeCls = 'alt'; labelBadge = '↹ Alternative (OU)';
+        recsPourEtudes.push(key.replace(/^OUT_/i, '').trim());
+      }
+
+      var card = document.createElement('div');
+      card.className = 'result-card ' + typeCls;
+      card.innerHTML = '<h4>' + key.replace(/^OUT_/i, '') + '</h4><span class="badge ' + typeCls + '">' + labelBadge + '</span>';
+      grid.appendChild(card);
+    });
+
+    // 5. Études pertinentes
+    renderEtudes(donnees);
+
+    // 6. Affichage
     show('screen-results');
   }
 
-  function renderEtudes() {
+  function renderEtudes(donneesResultats) {
     var container = $('etudes-container');
-    if (!container || !baseEtudes || !baseEtudes.etudes) return; 
-    
+    if (!container || !baseEtudes) return;
     container.innerHTML = '';
-    var profilPatient = construireProfilPatient();
-    var etudesPertinentes = [];
 
-    // Calcul du score
-    baseEtudes.etudes.forEach(function(etude) {
-      var score = calculerScoreEtude(etude, profilPatient, baseEtudes.mapping);
-      if (score >= 50) {
-        etude.scoreMatch = score;
-        etudesPertinentes.push(etude);
+    // Construire le profil patient à partir de l'historique
+    var profil = {};
+    history.forEach(function(h) { profil[h.question] = h.label; });
+
+    // Traitements recommandés
+    var traitementsRec = [];
+    Object.keys(donneesResultats).forEach(function(k) {
+      if (['1', '1.0', '0.5'].includes(String(donneesResultats[k]))) {
+        traitementsRec.push(k.replace(/^OUT_/i, '').trim());
       }
     });
 
-    etudesPertinentes.sort(function(a, b) { return b.scoreMatch - a.scoreMatch; });
+    // Noms lisibles des colonnes outcomes (première ligne = dictionnaire)
+    var outcomesLabels = (baseEtudes.etudes[0] && baseEtudes.etudes[0].outcomes) ? baseEtudes.etudes[0].outcomes : {};
+
+    var etudesPertinentes = baseEtudes.etudes.slice(1).map(function(etude) {
+      etude.scoreMatch = calculerScoreEtude(etude, profil, baseEtudes.mapping, traitementsRec);
+      return etude;
+    }).filter(function(e) { return e.scoreMatch >= 50; })
+      .sort(function(a, b) { return b.scoreMatch - a.scoreMatch; });
 
     if (etudesPertinentes.length === 0) {
-      container.innerHTML = '<p class="muted" style="text-align:center; padding:20px;">Aucune étude spécifique correspondant à ce profil n\'est disponible.</p>';
+      container.innerHTML = '<p class="muted">Aucune étude correspondante trouvée pour ce profil.</p>';
       return;
     }
 
     etudesPertinentes.forEach(function(etude) {
       var card = document.createElement('div');
       card.className = 'etude-card';
-      
-      // On construit dynamiquement le bloc des statistiques
-      var statsHtml = '';
-      var clesStats = Object.keys(etude.outcomes || {});
-      
-      if (clesStats.length > 0) {
-          clesStats.forEach(function(nomStat) {
-              statsHtml += '<div style="margin-bottom: 4px;"><strong>' + nomStat + ' :</strong> ' + etude.outcomes[nomStat] + '</div>';
-          });
-      } else {
-          statsHtml = '<div style="color: #999; font-style: italic;">Pas de données chiffrées standardisées pour cette étude.</div>';
+
+      // Outcomes avec labels lisibles
+      var outcomesHtml = Object.keys(etude.outcomes || {}).map(function(k) {
+        var label = outcomesLabels[k] || k;
+        return '<div><strong>' + label + ' :</strong> ' + etude.outcomes[k] + '</div>';
+      }).join('');
+
+      // Critères d'inclusion (non vides)
+      var criteresHtml = '';
+      if (etude.criteres) {
+        var criteresListe = Object.keys(etude.criteres).filter(function(k) {
+          var v = String(etude.criteres[k]);
+          return v !== '-1' && v !== 'nan' && v !== '';
+        }).map(function(k) {
+          return '<span class="critere-tag">' + k + ' : ' + etude.criteres[k] + '</span>';
+        }).join('');
+        if (criteresListe) {
+          criteresHtml = '<div class="etude-criteres">' + criteresListe + '</div>';
+        }
       }
 
-      card.innerHTML = `
-        <div class="etude-header">
-            <span class="etude-score">${etude.scoreMatch}% Match</span>
-            <span class="etude-preuve">Preuve: Niveau ${etude.niveau_preuve}</span>
-        </div>
-        <h4 class="etude-title">${etude.objectif !== 'NC' ? etude.objectif : 'Étude clinique'}</h4>
-        <div class="etude-stats">
-            ${statsHtml}
-        </div>
-        <a href="${etude.reference}" target="_blank" class="etude-link">Voir l'étude (DOI) ↗</a>
-      `;
+      var niveauPreuve = etude.niveau_preuve !== '-1' ? 'Niveau ' + etude.niveau_preuve : 'Niveau NC';
+      var titreEtude = (etude.objectif && etude.objectif !== '-1') ? etude.objectif : 'Étude clinique';
+      var lienRef = (etude.reference && etude.reference !== '-1') ? etude.reference : null;
+
+      card.innerHTML =
+        '<div class="etude-header">' +
+          '<span class="etude-score">' + etude.scoreMatch + '% Match</span>' +
+          '<span class="etude-preuve">' + niveauPreuve + '</span>' +
+        '</div>' +
+        '<h4 class="etude-title">' + titreEtude + '</h4>' +
+        '<div class="etude-traitements"><strong>Traitements évalués :</strong> ' + etude.traitements_evalues.join(', ') + '</div>' +
+        criteresHtml +
+        (outcomesHtml ? '<div class="etude-stats">' + outcomesHtml + '</div>' : '<p class="muted" style="font-size:13px;margin-bottom:12px;">Pas de données chiffrées disponibles.</p>') +
+        (lienRef ? '<a href="' + lienRef + '" target="_blank" rel="noopener" class="etude-link">Voir la référence ↗</a>' : '');
+
       container.appendChild(card);
     });
   }
 
-  /* ════════════════════════════════════════════════════════════
-     6. RECOMMENCER
-  ════════════════════════════════════════════════════════════ */
-  function recommencer() {
-    history = [];
-    current = null;
-    $('quiz-choices').innerHTML  = '';
-    $('results-grid').innerHTML  = '';
-    $('results-path').innerHTML  = '';
-    var ec = $('etudes-container'); if(ec) ec.innerHTML = '';
-    show('screen-home');
-  }
+  function recommencer() { history = []; current = null; show('screen-home'); }
 
-  /* Fonctions globales pour le HTML */
   window.demarrer    = demarrer;
   window.reculer     = reculer;
   window.recommencer = recommencer;
   window.accueil     = recommencer;
-
-  /* ─── Lancement ─── */
   load();
 }());
