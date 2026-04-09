@@ -181,24 +181,53 @@
   }
 
   function renderResults(donnees) {
-    $('results-path').innerHTML = '';
-    history.forEach(function (h, i) {
-      if (i > 0) { var sep = document.createElement('span'); sep.className = 'path-sep'; sep.textContent = '›'; $('results-path').appendChild(sep); }
-      var s = document.createElement('span'); s.className = 'path-step'; s.textContent = humaniserLabel(h.label); $('results-path').appendChild(s);
-    });
+    // 1. Mise à jour des barres de progression
+    if ($('quiz-progress-bar')) $('quiz-progress-bar').style.width = '100%';
+    if ($('quiz-pct-label')) $('quiz-pct-label').textContent = '100 %';
+    if ($('quiz-step-label')) $('quiz-step-label').textContent = 'Terminé';
 
-    var grid = $('results-grid'); grid.innerHTML = '';
-    var entries = Object.keys(donnees || {}).map(function (k) {
-      return { name: k.replace(/^OUT_/i, ''), val: donnees[k], cls: cls(donnees[k]) };
-    });
-    entries.sort(function (a, b) { var order = { rec: 0, alt: 1, nrec: 2, ns: 3 }; return order[a.cls] - order[b.cls]; });
-    entries.forEach(function (e) {
-      var card = document.createElement('div'); card.className = 'result-card ' + e.cls;
-      card.innerHTML = `<h4>${e.name}</h4><span class="badge ${e.cls}">${badge(e.val)}</span>`;
+    // 2. Nettoyage et préparation de la grille
+    var grid = $('results-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    var recsPourEtudes = [];
+
+    // 3. Création des cartes de résultats
+    Object.keys(donnees || {}).forEach(function (key) {
+      var scoreBrut = String(donnees[key]);
+      var typeCls = 'ns'; // Par défaut : non spécifié
+      var labelBadge = 'Non spécifié';
+
+      // Logique "cls" intégrée directement ici
+      if (scoreBrut === '1' || scoreBrut === '1.0') {
+        typeCls = 'rec';
+        labelBadge = '✓ Recommandé';
+        recsPourEtudes.push(key.replace(/^OUT_/i, '').trim());
+      } else if (scoreBrut === '0' || scoreBrut === '0.0') {
+        typeCls = 'nrec';
+        labelBadge = '✗ Non recommandé';
+      } else if (scoreBrut === '0.5') {
+        typeCls = 'alt';
+        labelBadge = '↹ Alternative (OU)';
+        recsPourEtudes.push(key.replace(/^OUT_/i, '').trim());
+      }
+
+      var card = document.createElement('div');
+      card.className = 'result-card ' + typeCls;
+      card.innerHTML = `
+        <h4>${key.replace(/^OUT_/i, '')}</h4>
+        <span class="badge ${typeCls}">${labelBadge}</span>
+      `;
       grid.appendChild(card);
     });
 
-    renderEtudes(donnees);
+    // 4. Lancement du matching des études
+    if (typeof renderEtudes === 'function') {
+      renderEtudes(donnees); 
+    }
+    
+    // 5. Affichage de l'écran
     show('screen-results');
   }
 
