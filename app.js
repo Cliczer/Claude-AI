@@ -7,6 +7,7 @@
 
   var tree       = null;
   var baseEtudes = null;
+  window.baseEtudes = null; // Permet l'accès depuis la console
   var current    = null;
   var history    = [];
   var maxDepth   = 1;
@@ -38,6 +39,7 @@
     .then(function (results) {
       tree       = results[0];
       baseEtudes = results[1];
+      window.baseEtudes = results[1];
       maxDepth   = depth(tree, 0) || 1;
       var bs = $('btn-start'), bh = $('btn-start-hero');
       if (bs) { bs.disabled = false; bs.textContent = 'Commencer →'; }
