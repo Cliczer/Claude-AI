@@ -172,71 +172,56 @@
 
   /* ─── MOTEUR DE MATCHING AVANCÉ (CORRIGÉ) ─── */
   function calculerScoreEtude(etude, profilPatient, mapping, traitementsRecommandes) {
+    let scorePoints = 0;
+    let criteresEvalues = 0;
+
     // 1. FILTRE DU TRAITEMENT (Double Matching)
-    var traitementsEtude = etude.traitements_evalues || [];
-    var matchTraitement = false;
-    
-    if (traitementsEtude.length === 0 || traitementsRecommandes.length === 0) {
-        matchTraitement = true; 
-    } else {
-        // Nettoyage des noms pour comparaison
-        var cleanRecs = traitementsRecommandes.map(r => r.toLowerCase().trim());
-        var cleanEtude = traitementsEtude.map(t => t.toLowerCase().trim());
-        
-        matchTraitement = cleanRecs.some(r => cleanEtude.includes(r));
-    }
+    let traitementsEtude = etude.traitements_evalues || [];
+    let cleanRecs = traitementsRecommandes.map(r => r.toLowerCase().trim());
+    let cleanEtude = traitementsEtude.map(t => t.toLowerCase().trim());
+    let matchTraitement = (cleanRecs.length === 0) || cleanRecs.some(r => cleanEtude.includes(r));
     
     if (!matchTraitement) return 0;
 
-    // 2. FILTRE DU PROFIL CLINIQUE
-    var scorePoints = 0;
-    var criteresEvalues = 0;
+    // 2. FILTRE CLINIQUE (Matching des cases Excel)
+    for (let questionArbre in profilPatient) {
+      let reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
+      if (reponsePatient === "-1" || reponsePatient === "non renseigné") continue;
 
-    // On parcourt les réponses du patient
-    for (var questionArbre in profilPatient) {
-      var reponsePatient = String(profilPatient[questionArbre]).toLowerCase().trim();
-      if (reponsePatient === "-1" || reponsePatient === "-1.0" || reponsePatient === "non renseigné") continue;
-
-      // Trouver quelle colonne de l'étude correspond à cette question
-      var colonneEtude = null;
-      for (var col in mapping) {
-        if (mapping[col].includes(questionArbre)) {
-          colonneEtude = col;
-          break;
-        }
+      // Trouver la colonne correspondante dans l'étude
+      let colonneEtude = null;
+      for (let col in mapping) {
+        if (mapping[col].includes(questionArbre)) { colonneEtude = col; break; }
       }
 
-      // Si on a trouvé une colonne correspondante dans l'étude
       if (colonneEtude && etude.hasOwnProperty(colonneEtude)) {
         criteresEvalues++;
-        var valeurEtude = String(etude[colonneEtude]).trim().toLowerCase();
+        let valeurCase = String(etude[colonneEtude]).toLowerCase().trim();
 
-        // JOKER : Si l'étude accepte tout le monde sur ce critère
-        if (valeurEtude === "-1" || valeurEtude === "nan" || valeurEtude === "nc" || valeurEtude === "") {
+        // JOKER : La case contient "nc", "nan" ou "-1"
+        if (valeurCase === "-1" || valeurCase === "nan" || valeurCase === "nc") {
           scorePoints++;
         } 
-        // CAS NUMÉRIQUE (Age, Ki67)
-        else if (colonneEtude.indexOf("Âge") !== -1 || colonneEtude.indexOf("ki67") !== -1) {
-          if (matchNumerique(reponsePatient, valeurEtude)) scorePoints++;
+        // MATCHING NUMÉRIQUE (Age, Ki67)
+        else if (colonneEtude.includes("Âge") || colonneEtude.includes("ki67")) {
+          if (matchNumerique(reponsePatient, valeurCase)) scorePoints++;
         }
-        // CAS TEXTE (T, N, HER2...)
+        // MATCHING TEXTE (T, N, HER2...) - Utilisation de INCLUDES pour gérer les listes (ex: "T1, T2")
         else {
-          // Simplification des valeurs pour comparaison (ex: "1.0" -> "1")
-          var p = reponsePatient.replace('.0', '');
-          var e = valeurEtude.replace('.0', '');
-
-          if (e.includes(p) || p.includes(e)) {
+          let p = reponsePatient.replace('.0', ''); // "1.0" -> "1"
+          
+          // Gestion des synonymes médicaux
+          if ((p === "1" || p === "oui" || p === "positif") && (valeurCase.includes("1") || valeurCase.includes("positif") || valeurCase.includes("oui"))) {
             scorePoints++;
-          } else if ((p === "oui" || p === "1" || p === "positif") && (e === "1" || e === "positif" || e === "oui")) {
+          } else if ((p === "0" || p === "non" || p === "négatif") && (valeurCase.includes("0") || valeurCase.includes("négatif") || valeurCase.includes("non"))) {
             scorePoints++;
-          } else if ((p === "non" || p === "0" || p === "négatif") && (e === "0" || e === "négatif" || e === "non")) {
+          } else if (valeurCase.includes(p)) {
             scorePoints++;
           }
         }
       }
     }
 
-    // Calcul final du score en %
     return criteresEvalues > 0 ? Math.round((scorePoints / criteresEvalues) * 100) : 100;
   }
 
